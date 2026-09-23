@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supermart Retail POS & Billing System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Thermal Receipt Print Styles */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #receipt-print-area, #receipt-print-area * {
+        visibility: visible !important;
+      }
+      #receipt-print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm;
+        margin: 0;
+        padding: 4mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 11px;
+        color: #000;
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen overflow-hidden flex flex-col">
+
+  <!-- TOP HEADER -->
+  <header class="bg-slate-900 text-white px-6 py-3 flex justify-between items-center shrink-0 border-b border-slate-800">
+    <div class="flex items-center space-x-3">
+      <div class="bg-blue-600 p-2 rounded-lg font-bold text-lg leading-none">POS</div>
+      <div>
+        <h1 class="font-bold text-base tracking-wide">Supermart Retail Terminal</h1>
+        <p class="text-xs text-slate-400">Terminal #01 • Cashier: Alex Turner</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-4 text-xs">
+      <span class="bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700">
+        Hotkey: <strong class="text-blue-400">F2</strong> Search Bar
+      </span>
+      <span id="current-time" class="font-mono text-slate-300">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="flex flex-1 overflow-hidden">
+    
+    <!-- LEFT PANEL: CATALOG & SEARCH (65%) -->
+    <main class="w-8/12 flex flex-col p-4 border-r border-slate-200 bg-slate-50">
+      
+      <!-- Search & Filter Controls -->
+      <div class="flex gap-3 mb-4">
+        <div class="relative flex-1">
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Scan barcode or type name (Press F2 to focus)..." 
+            class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            autofocus
+          >
+          <svg class="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <select id="category-filter" class="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-600">
+          <option value="ALL">All Categories</option>
+          <option value="Dairy & Eggs">Dairy & Eggs</option>
+          <option value="Bakery">Bakery</option>
+          <option value="Beverages">Beverages</option>
+          <option value="Pantry">Pantry</option>
+        </select>
+      </div>
+
+      <!-- Error / Notification Banner -->
+      <div id="alert-banner" class="hidden mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm flex justify-between items-center">
+        <span id="alert-text">Error message here</span>
+        <button onclick="hideAlert()" class="font-bold text-red-900 hover:text-red-600">&times;</button>
+      </div>
+
+      <!-- Product Grid -->
+      <div id="product-grid" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pr-1">
+        <!-- Products injected dynamically via JS -->
+      </div>
+    </main>
+
+    <!-- RIGHT PANEL: CART & BILLING (35%) -->
+    <aside class="w-4/12 bg-white flex flex-col h-full shadow-xl">
+      
+      <!-- Customer Header -->
+      <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+        <div class="text-xs">
+          <span class="text-slate-500 block">Selected Customer:</span>
+          <span id="customer-name-display" class="font-semibold text-slate-800">Walk-in Customer</span>
+        </div>
+        <select id="customer-select" class="text-xs bg-white border border-slate-300 rounded px-2 py-1 focus:outline-hidden">
+          <option value="">Walk-in Customer</option>
+          <option value="c1">Jane Doe (555-0192)</option>
+          <option value="c2">John Smith (555-0144)</option>
+        </select>
+      </div>
+
+      <!-- Itemized Cart Table Header -->
+      <div class="px-4 py-2 bg-slate-100 border-b border-slate-200 grid grid-cols-12 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+        <span class="col-span-6">Item</span>
+        <span class="col-span-3 text-center">Qty</span>
+        <span class="col-span-3 text-right">Total</span>
+      </div>
+
+      <!-- Cart Line Items Container -->
+      <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- Cart Items injected dynamically -->
+      </div>
+
+      <!-- Calculations & Checkout Controls -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
+        
+        <!-- Summary Numbers -->
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between text-slate-600">
+            <span>Subtotal</span>
+            <span id="cart-subtotal" class="font-mono">$0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Sales Tax (8%)</span>
+            <span id="cart-tax" class="font-mono">$0.00</span>
+          </div>
+          <div class="flex justify-between text-base font-bold text-slate-900 pt-2 border-t border-slate-200">
+            <span>Total Payable</span>
+            <span id="cart-total" class="font-mono text-emerald-600">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Payment Method Toggle Buttons -->
+        <div class="grid grid-cols-3 gap-2 pt-2">
+          <button type="button" onclick="setPaymentMethod('CASH')" id="btn-pay-cash" class="pay-method-btn py-2 text-xs font-bold rounded-lg border bg-blue-600 text-white border-blue-600">CASH</button>
+          <button type="button" onclick="setPaymentMethod('CARD')" id="btn-pay-card" class="pay-method-btn py-2 text-xs font-bold rounded-lg border bg-white text-slate-700 border-slate-300 hover:bg-slate-100">CARD</button>
+          <button type="button" onclick="setPaymentMethod('WALLET')" id="btn-pay-wallet" class="pay-method-btn py-2 text-xs font-bold rounded-lg border bg-white text-slate-700 border-slate-300 hover:bg-slate-100">WALLET</button>
+        </div>
+
+        <!-- Cash Calculation Section -->
+        <div id="cash-calculator" class="flex items-center gap-2 pt-1">
+          <input 
+            type="number" 
+            id="cash-tendered-input" 
+            placeholder="Cash Tendered" 
+            class="flex-1 text-xs p-2.5 bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+            step="0.01"
+          >
+          <div class="text-right text-xs pr-1">
+            <span class="block text-slate-400 text-[10px]">Change Due</span>
+            <span id="change-due-display" class="font-bold text-slate-800 font-mono">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Submit Checkout Button -->
+        <button 
+          id="checkout-btn" 
+          onclick="processCheckout()" 
+          disabled 
+          class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-sm rounded-lg shadow-sm transition-colors flex justify-center items-center gap-2"
+        >
+          COMPLETE & PRINT RECEIPT
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- HIDDEN PRINT AREA FOR THERMAL RECEIPT -->
+  <div id="receipt-print-area" class="hidden">
+    <!-- Receipts injected dynamically for window.print() -->
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // --- DATABASE / STATE ---
+    const PRODUCTS = [
+      { id: "p1", barcode: "8901001", name: "Organic Whole Milk 1L", category: "Dairy & Eggs", price: 3.49, stock: 45, unit: "pcs" },
+      { id: "p2", barcode: "8901002", name: "Whole Wheat Bread 500g", category: "Bakery", price: 2.29, stock: 18, unit: "pcs" },
+      { id: "p3", barcode: "8901003", name: "Arabica Coffee Beans 250g", category: "Pantry", price: 8.99, stock: 5, unit: "pcs" },
+      { id: "p4", barcode: "8901004", name: "Sparkling Water 6-Pack", category: "Beverages", price: 5.50, stock: 2, unit: "pack" },
+      { id: "p5", barcode: "8901005", name: "Cheddar Cheese Block 200g", category: "Dairy & Eggs", price: 4.25, stock: 20, unit: "pcs" },
+      { id: "p6", barcode: "8901006", name: "Dark Chocolate Bar 85%", category: "Pantry", price: 1.99, stock: 0, unit: "pcs" }
+    ];
+
+    const CUSTOMERS = {
+      "c1": { name: "Jane Doe", phone: "555-0192" },
+      "c2": { name: "John Smith", phone: "555-0144" }
+    };
+
+    let cart = [];
+    let selectedPaymentMethod = "CASH";
+    const TAX_RATE = 0.08;
+
+    // --- DOM REFERENCES ---
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const productGrid = document.getElementById('product-grid');
+    const cartItemsContainer = document.getElementById('cart-items');
+    const cartSubtotalEl = document.getElementById('cart-subtotal');
+    const cartTaxEl = document.getElementById('cart-tax');
+    const cartTotalEl = document.getElementById('cart-total');
+    const cashTenderedInput = document.getElementById('cash-tendered-input');
+    const changeDueEl = document.getElementById('change-due-display');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    const alertBanner = document.getElementById('alert-banner');
+    const alertText = document.getElementById('alert-text');
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      renderProducts();
+      renderCart();
+      startClock();
+
+      // Keyboard Event Listeners
+      searchInput.addEventListener('input', renderProducts);
+      categoryFilter.addEventListener('change', renderProducts);
+      cashTenderedInput.addEventListener('input', calculateTotals);
+
+      // Global Scanner Listener & Hotkey (F2)
+      let barcodeBuffer = "";
+      let lastKeyTime = Date.now();
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "F2") {
+          e.preventDefault();
+          searchInput.focus();
+          return;
+        }
+
+        const currentTime = Date.now();
+        if (currentTime - lastKeyTime > 100) barcodeBuffer = "";
+        lastKeyTime = currentTime;
+
+        if (e.key === "Enter" && barcodeBuffer.length > 3) {
+          const matched = PRODUCTS.find(p => p.barcode === barcodeBuffer);
+          if (matched) {
+            addToCart(matched.id);
+            barcodeBuffer = "";
+            searchInput.value = "";
+            renderProducts();
+          }
+        } else if (e.key.length === 1) {
+          barcodeBuffer += e.key;
+        }
+      });
+    });
+
+    // --- RENDER FUNCTIONS ---
+    function renderProducts() {
+      const query = searchInput.value.toLowerCase().trim();
+      const cat = categoryFilter.value;
+
+      const filtered = PRODUCTS.filter(p => {
+        const matchesQuery = p.name.toLowerCase().includes(query) || p.barcode.includes(query);
+        const matchesCat = cat === "ALL" || p.category === cat;
+        return matchesQuery && matchesCat;
+      });
+
+      productGrid.innerHTML = filtered.map(p => {
+        const isOutOfStock = p.stock === 0;
+        const isLowStock = p.stock > 0 && p.stock <= 5;
+
+        return `
+          <button 
+            onclick="${isOutOfStock ? '' : `addToCart('${p.id}')`}"
+            class="flex flex-col justify-between p-3 bg-white rounded-lg border text-left transition shadow-2xs ${
+              isOutOfStock 
+                ? 'opacity-50 cursor-not-allowed border-slate-200' 
+                : 'border-slate-200 hover:border-blue-500 hover:shadow-md'
+            }"
+          >
+            <div>
+              <div class="flex justify-between items-start mb-1">
+                <span class="text-[10px] font-mono text-slate-400">${p.barcode}</span>
+                ${isLowStock ? '<span class="text-[9px] bg-amber-100 text-amber-800 font-semibold px-1 rounded">Low Stock</span>' : ''}
+                ${isOutOfStock ? '<span class="text-[9px] bg-red-100 text-red-800 font-semibold px-1 rounded">Out of Stock</span>' : ''}
+              </div>
+              <h3 class="font-semibold text-xs text-slate-800 line-clamp-2">${p.name}</h3>
+            </div>
+            <div class="mt-3 flex justify-between items-baseline">
+              <span class="text-[11px] text-slate-500">${p.stock} ${p.unit}</span>
+              <span class="text-sm font-bold text-slate-900">$${p.price.toFixed(2)}</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderCart() {
+      if (cart.length === 0) {
+        cartItemsContainer.innerHTML = `
+          <div class="h-full flex flex-col items-center justify-center text-slate-400">
+            <svg class="w-10 h-10 mb-2 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path>
+            </svg>
+            <p class="text-xs">Cart is empty</p>
+          </div>
+        `;
+      } else {
+        cartItemsContainer.innerHTML = cart.map(item => `
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div class="flex-1 pr-2">
+              <h4 class="text-xs font-semibold text-slate-800 line-clamp-1">${item.name}</h4>
+              <span class="text-[10px] text-slate-500">$${item.price.toFixed(2)} each</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="flex items-center border border-slate-200 rounded">
+                <button onclick="updateQty('${item.id}', -1)" class="px-1.5 py-0.5 hover:bg-slate-100 text-xs font-bold text-slate-600">-</button>
+                <span class="px-2 text-xs font-bold">${item.qty}</span>
+                <button onclick="updateQty('${item.id}', 1)" class="px-1.5 py-0.5 hover:bg-slate-100 text-xs font-bold text-slate-600">+</button>
+              </div>
+              <span class="text-xs font-bold w-12 text-right font-mono">$${(item.price * item.qty).toFixed(2)}</span>
+              <button onclick="removeFromCart('${item.id}')" class="text-slate-300 hover:text-red-500 ml-1 font-bold text-sm">&times;</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      calculateTotals();
+    }
+
+    // --- CART ACTIONS ---
+    function addToCart(productId) {
+      hideAlert();
+      const product = PRODUCTS.find(p => p.id === productId);
+      if (!product) return;
+
+      const existing = cart.find(i => i.id === productId);
+      const currentCartQty = existing ? existing.qty : 0;
+
+      if (currentCartQty + 1 > product.stock) {
+        showAlert(`Stock limit reached for "${product.name}". Max available: ${product.stock}`);
+        return;
+      }
+
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ ...product, qty: 1 });
+      }
+
+      renderCart();
+    }
+
+    function updateQty(productId, delta) {
+      hideAlert();
+      const product = PRODUCTS.find(p => p.id === productId);
+      const item = cart.find(i => i.id === productId);
+      if (!item) return;
+
+      const newQty = item.qty + delta;
+      if (newQty > product.stock) {
+        showAlert(`Stock overflow! Only ${product.stock} units available.`);
+        return;
+      }
+
+      if (newQty <= 0) {
+        removeFromCart(productId);
+      } else {
+        item.qty = newQty;
+        renderCart();
+      }
+    }
+
+    function removeFromCart(productId) {
+      cart = cart.filter(i => i.id !== productId);
+      renderCart();
+    }
+
+    // --- FINANCIAL CALCULATIONS ---
+    function calculateTotals() {
+      const subtotal = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
+      const tax = subtotal * TAX_RATE;
+      const total = subtotal + tax;
+
+      cartSubtotalEl.innerText = `$${subtotal.toFixed(2)}`;
+      cartTaxEl.innerText = `$${tax.toFixed(2)}`;
+      cartTotalEl.innerText = `$${total.toFixed(2)}`;
+
+      // Cash Tender calculations
+      const cashTendered = parseFloat(cashTenderedInput.value) || 0;
+      const changeDue = Math.max(0, cashTendered - total);
+      changeDueEl.innerText = `$${changeDue.toFixed(2)}`;
+
+      // Button validation
+      if (cart.length === 0) {
+        checkoutBtn.disabled = true;
+      } else if (selectedPaymentMethod === "CASH" && cashTendered < total) {
+        checkoutBtn.disabled = true;
+      } else {
+        checkoutBtn.disabled = false;
+      }
+    }
+
+    function setPaymentMethod(method) {
+      selectedPaymentMethod = method;
+      document.querySelectorAll('.pay-method-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+        btn.classList.add('bg-white', 'text-slate-700', 'border-slate-300');
+      });
+
+      const activeBtn = document.getElementById(`btn-pay-${method.toLowerCase()}`);
+      activeBtn.classList.remove('bg-white', 'text-slate-700', 'border-slate-300');
+      activeBtn.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+
+      const cashCalcContainer = document.getElementById('cash-calculator');
+      if (method === 'CASH') {
+        cashCalcContainer.classList.remove('hidden');
+      } else {
+        cashCalcContainer.classList.add('hidden');
+      }
+
+      calculateTotals();
+    }
+
+    // --- CHECKOUT & PRINT RECEIPT ENGINE ---
+    function processCheckout() {
+      if (cart.length === 0) return;
+
+      const subtotal = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
+      const tax = subtotal * TAX_RATE;
+      const total = subtotal + tax;
+      const cashTendered = selectedPaymentMethod === "CASH" ? (parseFloat(cashTenderedInput.value) || total) : total;
+      const changeDue = Math.max(0, cashTendered - total);
+
+      const custSelect = document.getElementById('customer-select');
+      const custName = custSelect.value ? CUSTOMERS[custSelect.value].name : "Walk-in Customer";
+      const invoiceNum = `INV-${Date.now().toString().slice(-6)}`;
+      const timestamp = new Date().toLocaleString();
+
+      // Deduct stock in catalog
+      cart.forEach(cartItem => {
+        const prod = PRODUCTS.find(p => p.id === cartItem.id);
+        if (prod) prod.stock -= cartItem.qty;
+      });
+
+      // Build Print HTML Template
+      const receiptHTML = `
+        <div class="text-center mb-2">
+          <h2 class="font-bold text-sm uppercase">SUPERMART RETAIL LTD</h2>
+          <p class="text-[9px]">123 Commercial Blvd, Suite 100</p>
+          <p class="text-[9px]">TRN: 998877665 | Tel: +1 800-555-0199</p>
+        </div>
+        <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+        <div class="text-[10px]">
+          <div>Invoice: <strong>${invoiceNum}</strong></div>
+          <div>Date: ${timestamp}</div>
+          <div>Cashier: Alex Turner</div>
+          <div>Customer: ${custName}</div>
+        </div>
+        <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+        <table class="w-full text-left text-[10px]">
+          <thead>
+            <tr style="border-bottom: 1px solid #000;">
+              <th>ITEM</th>
+              <th class="text-center">QTY</th>
+              <th class="text-right">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cart.map(i => `
+              <tr>
+                <td class="py-0.5">${i.name}</td>
+                <td class="text-center py-0.5">${i.qty}</td>                 <td class="text-right py-0.5">$${(i.price * i.qty).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+        <div class="text-[10px] space-y-0.5">
+          <div class="flex justify-between"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>Tax (8%):</span><span>$${tax.toFixed(2)}</span></div>
+          <div class="flex justify-between font-bold text-xs pt-1" style="border-top: 1px solid #000;">
+            <span>TOTAL:</span><span>$${total.toFixed(2)}</span>
+          </div>
+        </div>
+        <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+        <div class="text-[10px]">
+          <div class="flex justify-between"><span>Payment:</span><span>${selectedPaymentMethod}</span></div>
+          <div class="flex justify-between"><span>Tendered:</span><span>$${cashTendered.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>Change:</span><span>$${changeDue.toFixed(2)}</span></div>
+        </div>
+        <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+        <div class="text-center text-[9px] mt-2">
+          <p class="font-bold">THANK YOU FOR SHOPPING!</p>
+          <p>Returns accepted within 7 days with receipt.</p>
+        </div>
+      `;
+
+      // Mount thermal output & Trigger Browser Print Engine
+      const printArea = document.getElementById('receipt-print-area');
+      printArea.innerHTML = receiptHTML;
+
+      window.print();
+
+      // Reset state on completion
+      cart = [];
+      cashTenderedInput.value = "";
+      renderProducts();
+      renderCart();
+      hideAlert();
+    }
+
+    // --- HELPER FUNCTIONS ---
+    function showAlert(msg) {
+      alertText.innerText = msg;
+      alertBanner.classList.remove('hidden');
+    }
+
+    function hideAlert() {
+      alertBanner.classList.add('hidden');
+    }
+
+    function startClock() {
+      const clockEl = document.getElementById('current-time');
+      setInterval(() => {
+        clockEl.innerText = new Date().toLocaleTimeString();
+      }, 1000);
+    }
+  </script>
+</body>
+</html>
